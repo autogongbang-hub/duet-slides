@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="robots" content="noindex" />
+<title>Giving assistant · Duet Slides</title>
+<style>
+  :root { --bg:#f4f5f7; --card:#fff; --line:#e3e5e9; --text:#16181d; --mute:#667085; --blue:#2463eb; --ok:#12805c; --err:#b42318; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+  main { max-width:640px; margin:0 auto; padding:20px 16px 56px; }
+  h1 { font-size:26px; line-height:1.2; margin:0; }
+  h2 { font-size:18px; margin:0 0 10px; }
+  .sub { color:var(--mute); margin:4px 0 0; font-size:15px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px; margin-top:16px; }
+  label { display:block; font-size:14px; color:var(--mute); margin:10px 0 4px; }
+  textarea, input, select { width:100%; font:inherit; border:1px solid var(--line); border-radius:10px; padding:10px 12px; background:#fff; color:inherit; }
+  textarea { min-height:110px; resize:vertical; }
+  textarea:focus, input:focus, select:focus { outline:0; border-color:var(--blue); }
+  .row { display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; }
+  .row > * { flex:1 1 160px; }
+  button { font:inherit; min-height:46px; border-radius:10px; border:1px solid var(--line); background:#fff; padding:0 16px; cursor:pointer; }
+  button.primary { background:var(--blue); border-color:var(--blue); color:#fff; font-weight:600; }
+  button:disabled { opacity:.55; cursor:default; }
+  .link { border:0; background:none; color:var(--blue); padding:0; min-height:0; font-size:14px; text-decoration:underline; }
+  .steps { list-style:none; padding:0; margin:12px 0 0; font-size:14px; color:var(--mute); }
+  .steps li { padding:3px 0; }
+  .steps li::before { content:"✓ "; color:var(--ok); }
+  .steps li.bad::before { content:"! "; color:var(--err); }
+  .say { background:#f7f8fa; border:1px solid var(--line); border-radius:10px; padding:10px 12px; margin:0 0 12px; font-size:15px; }
+  .p { display:grid; grid-template-columns:1fr 1fr 110px 40px; gap:8px; margin-top:8px; align-items:center; }
+  .p input { padding:9px 10px; }
+  .p .x { min-height:40px; padding:0; color:var(--mute); }
+  .ph { display:grid; grid-template-columns:1fr 1fr 110px 40px; gap:8px; font-size:13px; color:var(--mute); margin-top:12px; }
+  .total { display:flex; justify-content:space-between; margin-top:12px; font-size:15px; color:var(--mute); }
+  .total b { color:var(--text); }
+  .msg { margin-top:10px; font-size:15px; }
+  .msg.err { color:var(--err); }
+  .msg.ok { color:var(--ok); }
+  .links { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; }
+  .links a { display:inline-flex; align-items:center; min-height:44px; padding:0 14px; border:1px solid var(--line); border-radius:10px; color:var(--text); text-decoration:none; background:#fff; }
+  .cur { font-size:15px; }
+  .cur span { color:var(--mute); }
+  .hidden { display:none !important; }
+  @media (max-width:520px) {
+    .ph { display:none; }
+    .p { grid-template-columns:1fr 44px; padding:10px 0; border-top:1px solid var(--line); }
+    .p input[data-k="name"], .p input[data-k="name2"] { grid-column:1 / -1; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>Giving assistant</h1>
+  <p class="sub">Describe what you are raising money for. The assistant drafts a bilingual campaign. Nothing goes live until you approve it.</p>
+
+  <div class="card cur" id="cur">Loading current campaign…</div>
+
+  <section class="card">
+    <h2>1. Describe the need</h2>
+    <label for="brief">In your own words</label>
+    <textarea id="brief" placeholder="Our youth are going to Guatemala in March. We need $3,000: about half for travel, the rest for clinic supplies and a kids program. The congregation speaks English and Spanish."></textarea>
+    <div class="row">
+      <div><label for="lang2">Second language on screen</label>
+        <select id="lang2"><option value="es">Spanish</option><option value="ko">Korean</option><option value="zh">Chinese</option><option value="pt">Portuguese</option><option value="fr">French</option><option value="vi">Vietnamese</option><option value="tl">Tagalog</option><option value="ja">Japanese</option></select></div>
+      <button class="primary" id="go" type="button">Draft campaign</button>
+    </div>
+    <button class="link" id="example" type="button">Use the example</button>
+    <ul class="steps hidden" id="steps"></ul>
+    <p class="msg" id="goMsg"></p>
+  </section>
+
+  <section class="card hidden" id="draft">
+    <h2>2. Check the draft</h2>
+    <p class="say" id="say"></p>
+    <label for="title">Title</label><input id="title" maxlength="80" />
+    <label for="title2">Title, second language</label><input id="title2" maxlength="80" translate="no" />
+    <div class="ph"><span>Purpose</span><span>Second language</span><span>Goal ($)</span><span></span></div>
+    <div id="purposes"></div>
+    <button class="link" id="add" type="button">+ Add a purpose</button>
+    <div class="total"><span>Total goal</span><b id="sum">$0</b></div>
+  </section>
+
+  <section class="card hidden" id="approve">
+    <h2>3. Approve</h2>
+    <p class="sub">This starts a new campaign at $0 on the giving page, the overlay and the giving screen.</p>
+    <label for="token">Admin token</label>
+    <input id="token" type="password" autocomplete="off" placeholder="ADMIN_TOKEN from the server" />
+    <div class="row" style="margin-top:12px"><button class="primary" id="ok" type="button">Approve and go live</button></div>
+    <p class="msg" id="okMsg"></p>
+    <p class="sub hidden" id="resetNote"></p>
+    <div class="links hidden" id="links">
+      <a href="/give/" target="_blank" rel="noopener">Giving page</a>
+      <a href="/screen/" target="_blank" rel="noopener">Giving screen</a>
+      <a href="/overlay/?demo=1" target="_blank" rel="noopener">Overlay preview</a>
+    </div>
+  </section>
+</main>
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+  const money = n => "$" + Math.round(+n || 0).toLocaleString("en-US");
+  const STEP = { get_giving_state: "Read the current campaign and totals", check_paypal: "Checked the PayPal account", propose_campaign: "Drafted the campaign" };
+  let lang2 = "es";
+  try { $("token").value = sessionStorage.getItem("duet-admin") || ""; } catch (e) {}
+
+  async function api(path, opt = {}) {
+    const r = await fetch(path, opt); const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error || "HTTP " + r.status); return j;
+  }
+  function paintCur(s) {
+    const c = s.campaign, t = s.totals;
+    $("cur").innerHTML = `<span>Live now:</span> <b>${esc(c.title)}</b> · ${money(t.sum)} of ${money(t.goal)} · ${t.count} gift${t.count === 1 ? "" : "s"}`;
+  }
+  api("/api/state").then(paintCur).catch(() => { $("cur").textContent = "Could not load the current campaign."; });
+  api("/api/config").then(c => { if (c.demoResetMinutes) { $("resetNote").textContent = `Public demo: the sample campaign comes back ${c.demoResetMinutes} minutes after a change. Gifts are kept.`; $("resetNote").classList.remove("hidden"); } if (!c.ai) { $("go").disabled = true; $("goMsg").className = "msg err"; $("goMsg").textContent = "AI is off on this server (no key)."; } }).catch(() => {});
+
+  $("example").onclick = () => { $("brief").value = $("brief").placeholder; $("brief").focus(); };
+
+  $("go").onclick = async () => {
+    const brief = $("brief").value.trim();
+    if (brief.length < 8) { $("goMsg").className = "msg err"; $("goMsg").textContent = "Write a sentence or two about the need."; return; }
+    lang2 = $("lang2").value;
+    $("go").disabled = true; $("go").textContent = "Drafting…"; $("goMsg").className = "msg"; $("goMsg").textContent = "";
+    $("steps").classList.add("hidden");
+    try {
+      const r = await api("/api/ai/campaign", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ brief, lang2 }) });
+      $("steps").innerHTML = r.steps.map(s => `<li class="${s.ok ? "" : "bad"}">${s.ok ? esc(STEP[s.tool] || s.tool) : "First draft had a problem, so it fixed it"}</li>`).join("");
+      $("steps").classList.remove("hidden");
+      fill(r.proposal, r.message);
+    } catch (e) { $("goMsg").className = "msg err"; $("goMsg").textContent = "Could not draft: " + e.message; }
+    finally { $("go").disabled = false; $("go").textContent = "Draft campaign"; }
+  };
+
+  function row(p = {}) {
+    const d = document.createElement("div"); d.className = "p";
+    d.innerHTML = `<input data-k="name" maxlength="60" placeholder="Purpose" value="${esc(p.name)}" aria-label="Purpose" />
+      <input data-k="name2" maxlength="60" placeholder="Second language" value="${esc(p.name2)}" aria-label="Purpose, second language" translate="no" />
+      <input data-k="goal" type="number" placeholder="Goal ($)" min="1" step="1" inputmode="numeric" value="${esc(p.goal)}" aria-label="Goal in dollars" />
+      <button class="x" type="button" aria-label="Remove">✕</button>`;
+    d.querySelector(".x").onclick = () => { d.remove(); sum(); };
+    $("purposes").appendChild(d);
+  }
+  function sum() { $("sum").textContent = money(read().purposes.reduce((a, p) => a + (+p.goal || 0), 0)); }
+  function fill(c, say) {
+    $("say").textContent = say || "Here is the draft.";
+    $("title").value = c.title || ""; $("title2").value = c.title2 || "";
+    $("purposes").innerHTML = ""; (c.purposes || []).forEach(row); sum();
+    $("draft").dataset.host = c.host || "";
+    $("draft").classList.remove("hidden"); $("approve").classList.remove("hidden");
+    $("links").classList.add("hidden"); $("okMsg").textContent = "";
+    $("draft").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+  function read() {
+    const purposes = [...$("purposes").children].map((d, i) => {
+      const v = k => d.querySelector(`[data-k="${k}"]`).value.trim();
+      return { id: v("name").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 20) || "p" + (i + 1), name: v("name"), name2: v("name2"), goal: Math.round(+v("goal") || 0) };
+    }).filter(p => p.name);
+    return { title: $("title").value.trim(), title2: $("title2").value.trim(), lang2, host: $("draft").dataset.host || undefined, purposes };
+  }
+  $("purposes").addEventListener("input", sum);
+  $("add").onclick = () => { row({ goal: 100 }); sum(); };
+
+  $("ok").onclick = async () => {
+    const c = read(), token = $("token").value.trim();
+    if (!c.title || !c.purposes.length) { $("okMsg").className = "msg err"; $("okMsg").textContent = "Add a title and at least one purpose."; return; }
+    if (!token) { $("okMsg").className = "msg err"; $("okMsg").textContent = "Enter the admin token."; return; }
+    $("ok").disabled = true;
+    try {
+      const s = await api("/api/campaign", { method: "PUT", headers: { "Content-Type": "application/json", Authorization: "Bearer " + token }, body: JSON.stringify(c) });
+      try { sessionStorage.setItem("duet-admin", token); } catch (e) {}
+      paintCur(s); $("okMsg").className = "msg ok"; $("okMsg").textContent = "Live. The giving page, overlay and giving screen now show this campaign.";
+      $("links").classList.remove("hidden");
+    } catch (e) { $("okMsg").className = "msg err"; $("okMsg").textContent = "Not approved: " + e.message; }
+    finally { $("ok").disabled = false; }
+  };
+})();
+</script>
+</body>
+</html>

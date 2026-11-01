@@ -1,0 +1,38 @@
+# Render Blueprint for the Duet Slides demo. Nothing here holds a secret:
+# values marked sync:false are typed into the Render dashboard once.
+# Free plan: the service sleeps when idle and its disk resets on restart,
+# so data/store.json starts again from the demo campaign in server/server.mjs.
+# For the judging window (Dec 1-15) switch the plan to starter.
+services:
+  - type: web
+    name: duet-slides
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: npm ci --omit=dev
+    startCommand: npm start
+    healthCheckPath: /api/config
+    autoDeployTrigger: "off"
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: PAYPAL_ENV
+        value: sandbox
+      - key: PAYPAL_CLIENT_ID
+        sync: false
+      - key: PAYPAL_CLIENT_SECRET
+        sync: false
+      - key: PAYPAL_WEBHOOK_ID
+        sync: false
+      - key: CLAUDE_API_KEY
+        sync: false
+      - key: CLAUDE_MODEL
+        value: claude-sonnet-5-5
+      - key: ADMIN_TOKEN
+        generateValue: true
+      - key: AI_DAILY_LIMIT
+        value: "300"
+      - key: AI_PER_IP_10MIN
+        value: "20"
+      - key: DEMO_RESET_MINUTES
+        value: "30"

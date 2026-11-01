@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Give · Duet Slides</title>
+<style>
+  :root { --bg:#f4f5f7; --card:#fff; --line:#e3e5e9; --text:#16181d; --mute:#667085; --blue:#2463eb; --ok:#12805c; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+  main { max-width:520px; margin:0 auto; padding:20px 16px 48px; }
+  .host { color:var(--mute); font-size:14px; margin:4px 0 2px; }
+  h1 { font-size:26px; line-height:1.2; margin:0; }
+  .l2 { color:var(--mute); font-size:15px; margin-top:2px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px; margin-top:16px; }
+  .bar { height:10px; background:#eceef2; border-radius:99px; overflow:hidden; margin:8px 0 4px; }
+  .bar > i { display:block; height:100%; width:0; background:var(--blue); border-radius:99px; transition:width .6s; }
+  .meta { display:flex; justify-content:space-between; font-size:14px; color:var(--mute); }
+  .p { padding:14px 0; border-top:1px solid var(--line); }
+  .p:first-of-type { border-top:0; padding-top:0; }
+  .p-top { display:flex; gap:12px; align-items:center; justify-content:space-between; }
+  .p-name b { display:block; font-size:17px; }
+  .p-name span { color:var(--mute); font-size:14px; }
+  .amt { display:flex; align-items:center; border:1px solid var(--line); border-radius:10px; padding:0 10px; width:120px; flex:none; background:#fff; }
+  .amt:focus-within { border-color:var(--blue); }
+  .amt span { color:var(--mute); }
+  .amt input { border:0; outline:0; width:100%; font:inherit; font-size:18px; padding:10px 4px; text-align:right; background:transparent; }
+  .chips { display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }
+  .chips button { border:1px solid var(--line); background:#fff; border-radius:99px; padding:8px 14px; font:inherit; font-size:15px; min-height:40px; cursor:pointer; }
+  .chips button:active { border-color:var(--blue); }
+  .total { display:flex; justify-content:space-between; align-items:baseline; font-size:18px; }
+  .total b { font-size:28px; }
+  label.opt { display:flex; gap:10px; align-items:center; margin-top:12px; font-size:15px; color:var(--mute); }
+  label.opt input { width:20px; height:20px; }
+  #pay { margin-top:14px; min-height:50px; }
+  .msg { margin-top:12px; font-size:15px; }
+  .msg.err { color:#b42318; }
+  .done { text-align:center; }
+  .done h2 { margin:6px 0; color:var(--ok); }
+  .sandbox { margin-top:18px; font-size:13px; color:var(--mute); text-align:center; }
+  .hidden { display:none !important; }
+</style>
+</head>
+<body>
+<main>
+  <p class="host" id="host"></p>
+  <h1 id="title">Loading…</h1>
+  <div class="l2" id="title2" translate="no"></div>
+
+  <div class="card">
+    <div class="meta"><span id="raised">$0 raised</span><span id="goal"></span></div>
+    <div class="bar"><i id="barAll"></i></div>
+    <div class="meta"><span id="count"></span><span></span></div>
+  </div>
+
+  <form class="card" id="form" autocomplete="off">
+    <div id="purposes"></div>
+  </form>
+
+  <div class="card" id="checkout">
+    <div class="total"><span>Your gift</span><b id="total">$0</b></div>
+    <label class="opt"><input type="checkbox" id="showName" /> Show my first name on the live stream</label>
+    <div id="pay"></div>
+    <div class="msg" id="msg" role="status" aria-live="polite"></div>
+  </div>
+
+  <div class="card done hidden" id="done">
+    <h2>Thank you!</h2>
+    <p id="doneText"></p>
+    <button class="chips-btn" type="button" id="again" style="border:1px solid var(--line);background:#fff;border-radius:10px;padding:10px 16px;font:inherit;min-height:44px">Give again</button>
+  </div>
+
+  <p class="sandbox" id="sandbox"></p>
+</main>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const money = n => "$" + (Math.round(n * 100) / 100).toLocaleString("en-US", { minimumFractionDigits: n % 1 ? 2 : 0, maximumFractionDigits: 2 });
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+let STATE = null, CONFIG = null;
+
+function render(s) {
+  STATE = s; const c = s.campaign, t = s.totals;
+  document.title = "Give · " + c.title;
+  $("host").textContent = c.host; $("title").textContent = c.title; $("title2").textContent = c.title2 || "";
+  $("raised").textContent = money(t.sum) + " raised"; $("goal").textContent = "Goal " + money(t.goal);
+  $("barAll").style.width = Math.min(100, t.goal ? t.sum / t.goal * 100 : 0) + "%";
+  $("count").textContent = t.count ? t.count + (t.count === 1 ? " gift" : " gifts") : "Be the first to give";
+  const have = new Set([...document.querySelectorAll("[data-p]")].map(x => x.dataset.p));
+  const same = c.purposes.length === have.size && c.purposes.every(p => have.has(p.id));
+  if (!same) {
+    $("purposes").innerHTML = c.purposes.map(p => `
+      <div class="p">
+        <div class="p-top">
+          <div class="p-name"><b>${esc(p.name)}</b><span translate="no">${esc(p.name2 || "")}</span></div>
+          <div class="amt"><span>$</span><input inputmode="decimal" data-p="${esc(p.id)}" placeholder="0" aria-label="Amount for ${esc(p.name)}" /></div>
+        </div>
+        <div class="bar"><i data-bar="${esc(p.id)}"></i></div>
+        <div class="meta"><span data-raised="${esc(p.id)}"></span><span>Goal ${money(p.goal)}</span></div>
+        <div class="chips">${[10, 25, 50, 100].map(v => `<button type="button" data-add="${esc(p.id)}" data-v="${v}">+$${v}</button>`).join("")}</div>
+      </div>`).join("");
+  }
+  c.purposes.forEach(p => {
+    const got = t.by[p.id] || 0;
+    document.querySelector(`[data-bar="${p.id}"]`).style.width = Math.min(100, p.goal ? got / p.goal * 100 : 0) + "%";
+    document.querySelector(`[data-raised="${p.id}"]`).textContent = money(got) + " raised";
+  });
+  updateTotal();
+}
+function splits() {
+  return [...document.querySelectorAll("[data-p]")].map(i => ({ purpose: i.dataset.p, amount: Math.round((parseFloat(i.value) || 0) * 100) / 100 }))
+    .filter(s => s.amount >= 1);
+}
+function updateTotal() { $("total").textContent = money(splits().reduce((a, s) => a + s.amount, 0)); }
+$("form").addEventListener("input", updateTotal);
+$("form").addEventListener("click", e => {
+  const b = e.target.closest("[data-add]"); if (!b) return;
+  const i = document.querySelector(`[data-p="${b.dataset.add}"]`);
+  i.value = (Math.round(((parseFloat(i.value) || 0) + +b.dataset.v) * 100) / 100).toString(); updateTotal();
+});
+const say = (t, err) => { $("msg").textContent = t || ""; $("msg").className = "msg" + (err ? " err" : ""); };
+
+async function api(path, body) {
+  const r = await fetch(path, { method: body ? "POST" : "GET", headers: body ? { "Content-Type": "application/json" } : {}, body: body ? JSON.stringify(body) : undefined });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || "Request failed (" + r.status + ")");
+  return j;
+}
+function loadSdk(cfg) {
+  return new Promise((ok, bad) => {
+    const s = document.createElement("script");
+    s.src = "https://www.paypal.com/sdk/js?client-id=" + encodeURIComponent(cfg.clientId) + "&currency=" + cfg.currency + "&intent=capture&components=buttons&enable-funding=venmo";
+    s.onload = ok; s.onerror = () => bad(new Error("Could not load PayPal")); document.head.appendChild(s);
+  });
+}
+async function setupPay() {
+  CONFIG = await api("/api/config");
+  if (CONFIG.env !== "live") $("sandbox").textContent = "Demo mode: PayPal sandbox. No real money moves.";
+  if (!CONFIG.paypal) { say("Giving is not set up on this server yet.", true); return; }
+  await loadSdk(CONFIG);
+  paypal.Buttons({
+    style: { layout: "vertical", shape: "rect", label: "donate", height: 48 },
+    onClick: (data, actions) => { if (!splits().length) { say("Enter an amount for at least one purpose.", true); return actions.reject(); } say(""); return actions.resolve(); },
+    createOrder: async () => (await api("/api/orders", { splits: splits(), showName: $("showName").checked })).id,
+    onApprove: async data => {
+      say("Finishing your gift…");
+      const r = await api("/api/orders/" + data.orderID + "/capture", {});
+      if (r.status !== "COMPLETED") { say("PayPal did not complete the payment (" + r.status + ").", true); return; }
+      const g = r.gift; say("");
+      $("doneText").textContent = g ? money(g.amount) + " for " + g.splits.map(s => STATE.campaign.purposes.find(p => p.id === s.purpose)?.name || s.purpose).join(", ") + "." : "Your gift was received.";
+      $("checkout").classList.add("hidden"); $("form").classList.add("hidden"); $("done").classList.remove("hidden");
+      document.querySelectorAll("[data-p]").forEach(i => i.value = ""); updateTotal();
+    },
+    onCancel: () => say("Payment cancelled. Nothing was charged."),
+    onError: err => say("Something went wrong: " + (err && err.message || err), true),
+  }).render("#pay");
+}
+$("again").addEventListener("click", () => { $("done").classList.add("hidden"); $("checkout").classList.remove("hidden"); $("form").classList.remove("hidden"); });
+
+api("/api/state").then(render).catch(e => say(e.message, true));
+const ev = new EventSource("/api/events");
+let lastEv = Date.now(); ["state", "gift"].forEach(k => ev.addEventListener(k, () => lastEv = Date.now()));
+setInterval(() => { if (Date.now() - lastEv > 6000) api("/api/state").then(render).catch(() => {}); }, 5000); // fallback if a proxy holds the stream
+ev.addEventListener("state", e => render(JSON.parse(e.data)));
+ev.addEventListener("gift", e => { if (STATE) { STATE.totals = JSON.parse(e.data).totals; render(STATE); } });
+setupPay().catch(e => say(e.message, true));
+</script>
+</body>
+</html>

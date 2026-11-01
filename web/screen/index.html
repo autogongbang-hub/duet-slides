@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Giving screen · Duet Slides</title>
+<!-- Full-screen 16:9 giving slide for the projector or an OBS browser source (1920x1080).
+     QR points to PUBLIC_URL/give/ (server .env), else this page's own origin. ?url= overrides. Press F for full screen. -->
+<style>
+  html, body { margin:0; height:100%; background:#0b0f17; color:#fff; overflow:hidden;
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+  .stage { position:absolute; inset:0; display:grid; place-items:center; }
+  .slide { width:min(100vw, 177.78vh); height:min(56.25vw, 100vh); position:relative; display:grid;
+    grid-template-columns: 1fr auto; gap:4%; padding:5.5% 6%; box-sizing:border-box; align-items:center; font-size:min(1.6vw, 2.84vh); }
+  .host { opacity:.65; font-size:1.1em; letter-spacing:.02em; }
+  h1 { font-size:3.2em; line-height:1.1; margin:.3em 0 .1em; }
+  .t2 { font-size:1.8em; opacity:.75; margin-bottom:1.2em; }
+  .p { margin:.9em 0; }
+  .p-row { display:flex; justify-content:space-between; align-items:baseline; gap:1em; font-size:1.25em; }
+  .p-row .n2 { opacity:.6; font-size:.8em; margin-left:.5em; }
+  .p-row .v { opacity:.85; white-space:nowrap; font-variant-numeric:tabular-nums; }
+  .bar { height:.6em; border-radius:99px; background:rgba(255,255,255,.14); overflow:hidden; margin-top:.4em; }
+  .bar i { display:block; height:100%; width:0; border-radius:99px; background:#4c8dff; transition:width 1.2s cubic-bezier(.2,.8,.2,1); }
+  .sum { margin-top:1.4em; font-size:1.5em; }
+  .sum b { font-size:1.5em; }
+  .qr { background:#fff; border-radius:1.2em; padding:1.1em; text-align:center; color:#0b0f17; width:19em; }
+  .qr svg { width:100%; height:auto; display:block; }
+  .qr .s1 { font-weight:700; font-size:1.35em; margin-top:.5em; }
+  .qr .s2 { font-size:1.05em; opacity:.7; }
+  .qr .u { font-size:.8em; opacity:.6; margin-top:.4em; word-break:break-all; }
+  .flash { position:absolute; left:50%; top:4%; transform:translate(-50%,-20%); opacity:0; transition:all .5s; background:#4c8dff;
+    padding:.6em 1.4em; border-radius:99px; font-size:1.3em; font-weight:600; white-space:nowrap; }
+  .flash.on { opacity:1; transform:translate(-50%,0); }
+  .demo { position:absolute; right:2%; bottom:2%; font-size:.75em; opacity:.45; }
+</style>
+</head>
+<body>
+<div class="stage"><div class="slide">
+  <div>
+    <div class="host" id="host"></div>
+    <h1 id="title"></h1>
+    <div class="t2" id="title2"></div>
+    <div id="purposes"></div>
+    <div class="sum"><b id="sum">$0</b> <span id="of"></span></div>
+  </div>
+  <div class="qr">
+    <div id="qr"></div>
+    <div class="s1">Scan to give</div>
+    <div class="s2" id="scan2"></div>
+    <div class="u" id="url"></div>
+  </div>
+  <div class="flash" id="flash"></div>
+  <div class="demo" id="demo"></div>
+</div></div>
+<script src="/vendor/qrcode-generator-1.4.4.js"></script>
+<script>
+"use strict";
+const $ = id => document.getElementById(id), qs = new URLSearchParams(location.search);
+const money = n => "$" + Math.round(n).toLocaleString("en-US");
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const SCAN2 = { es: "Escanee para dar", ko: "스캔해서 헌금하기", pt: "Escaneie para doar", fr: "Scannez pour donner" };
+let S = null;
+
+function drawQr(url) {
+  const q = qrcode(0, "M"); q.addData(url); q.make();
+  $("qr").innerHTML = q.createSvgTag({ cellSize: 8, margin: 0, scalable: true });
+  $("url").textContent = url.replace(/^https?:\/\//, "");
+}
+function paint() {
+  const c = S.campaign, t = S.totals;
+  $("host").textContent = c.host; $("title").textContent = c.title; $("title2").textContent = c.title2 || "";
+  $("scan2").textContent = SCAN2[c.lang2] || "";
+  $("purposes").innerHTML = c.purposes.map(p => `<div class="p"><div class="p-row"><span>${esc(p.name)}<span class="n2">${esc(p.name2 || "")}</span></span>
+    <span class="v">${money(t.by[p.id] || 0)} / ${money(p.goal)}</span></div><div class="bar"><i data-b="${esc(p.id)}"></i></div></div>`).join("");
+  requestAnimationFrame(() => c.purposes.forEach(p => {
+    const el = document.querySelector(`[data-b="${p.id}"]`); if (el) el.style.width = Math.min(100, p.goal ? (t.by[p.id] || 0) / p.goal * 100 : 0) + "%"; }));
+  $("sum").textContent = money(t.sum); $("of").textContent = "of " + money(t.goal) + " · " + t.count + (t.count === 1 ? " gift" : " gifts");
+}
+function flash(g) {
+  $("flash").textContent = (g.name && g.name !== "A friend" ? g.name + " gave " : "New gift: ") + money(g.amount);
+  $("flash").classList.add("on"); clearTimeout(flash.t); flash.t = setTimeout(() => $("flash").classList.remove("on"), 4000);
+}
+fetch("/api/config").then(r => r.json()).then(cfg => {
+  const base = qs.get("url") || cfg.publicUrl || location.origin;
+  drawQr(base.replace(/\/+$/, "") + "/give/");
+  if (cfg.env !== "live") $("demo").textContent = "PayPal sandbox demo";
+});
+const ev = new EventSource("/api/events");
+let lastEv = Date.now(); ["state", "gift"].forEach(k => ev.addEventListener(k, () => lastEv = Date.now()));
+const poll = () => fetch("/api/state").then(r => r.json()).then(d => { S = d; paint(); }).catch(() => {});
+poll(); setInterval(() => { if (Date.now() - lastEv > 6000) poll(); }, 5000);
+ev.addEventListener("state", e => { S = JSON.parse(e.data); paint(); });
+ev.addEventListener("gift", e => { const d = JSON.parse(e.data); if (!S) return; S.totals = d.totals; paint(); flash(d.gift); });
+document.addEventListener("keydown", e => { if (e.key === "f" || e.key === "F") (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()).catch(() => {}); });
+</script>
+</body>
+</html>

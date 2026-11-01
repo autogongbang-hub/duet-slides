@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Overlay · Duet Slides</title>
+<!-- OBS: Add Source > Browser > URL http://<server>/overlay/ , 1920x1080. Background stays transparent.
+     ?demo=1 shows a fake gift every 6 s (rehearsal only). ?goal=0 hides the goal card. -->
+<style>
+  html, body { margin:0; background:transparent; overflow:hidden; }
+  body { width:100vw; height:100vh; font:600 22px/1.3 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; color:#fff; }
+  .goal { position:absolute; left:48px; bottom:48px; width:440px; padding:18px 22px; border-radius:16px;
+    background:rgba(12,16,24,.78); text-shadow:0 1px 2px rgba(0,0,0,.4); }
+  .goal .t { font-size:24px; } .goal .t2 { font-size:18px; font-weight:500; opacity:.8; }
+  .bar { height:12px; border-radius:99px; background:rgba(255,255,255,.18); overflow:hidden; margin:12px 0 6px; }
+  .bar i { display:block; height:100%; width:0; background:#4c8dff; border-radius:99px; transition:width 1.2s cubic-bezier(.2,.8,.2,1); }
+  .row { display:flex; justify-content:space-between; font-size:18px; font-weight:500; opacity:.9; }
+  .thanks { position:absolute; left:50%; top:56px; transform:translate(-50%,-30px); opacity:0; transition:all .5s ease;
+    padding:18px 30px; border-radius:16px; background:rgba(12,16,24,.85); text-align:center; min-width:420px; }
+  .thanks.on { opacity:1; transform:translate(-50%,0); }
+  .thanks .a { font-size:30px; } .thanks .b { font-size:22px; font-weight:500; opacity:.85; margin-top:4px; }
+  .thanks .c { font-size:18px; font-weight:500; opacity:.75; margin-top:6px; }
+  .hidden { display:none; }
+</style>
+</head>
+<body>
+<div class="goal" id="goal">
+  <div class="t" id="t"></div><div class="t2" id="t2"></div>
+  <div class="bar"><i id="bar"></i></div>
+  <div class="row"><span id="raised"></span><span id="of"></span></div>
+</div>
+<div class="thanks" id="thanks"><div class="a" id="ta"></div><div class="b" id="tb"></div><div class="c" id="tc"></div></div>
+<script>
+"use strict";
+const $ = id => document.getElementById(id), qs = new URLSearchParams(location.search);
+const money = n => "$" + Math.round(n).toLocaleString("en-US");
+const THANKS2_ANON = { es: "¡Gracias por su ofrenda!", ko: "헌금에 감사드립니다", pt: "Obrigado pela sua oferta!", fr: "Merci pour votre don !" };
+const THANKS2 = { es: "¡Gracias", ko: "감사합니다", pt: "Obrigado", fr: "Merci", zh: "谢谢", ja: "ありがとう" };
+let S = null; const queue = []; let showing = false;
+if (qs.get("goal") === "0") $("goal").classList.add("hidden");
+
+function paint() {
+  if (!S) return; const c = S.campaign, t = S.totals;
+  $("t").textContent = c.title; $("t2").textContent = c.title2 || "";
+  $("bar").style.width = Math.min(100, t.goal ? t.sum / t.goal * 100 : 0) + "%";
+  $("raised").textContent = money(t.sum) + " raised"; $("of").textContent = "Goal " + money(t.goal);
+}
+function thank(g) { queue.push(g); if (!showing) next(); }
+function next() {
+  const g = queue.shift(); if (!g) { showing = false; return; } showing = true;
+  const c = S.campaign, names = g.splits.map(s => c.purposes.find(p => p.id === s.purpose) || { name: s.purpose, name2: "" });
+  const t2 = THANKS2[c.lang2];
+  const anon = !g.name || g.name === "A friend";
+  $("ta").textContent = anon ? "Thank you for your gift!" : "Thank you, " + g.name + "!";
+  $("tb").textContent = !t2 ? "" : anon ? (THANKS2_ANON[c.lang2] || t2) : t2 + (c.lang2 === "es" ? ", " + g.name + "!" : ", " + g.name);
+  $("tc").textContent = money(g.amount) + " · " + names.map(p => p.name + (p.name2 ? " / " + p.name2 : "")).join(" · ");
+  $("thanks").classList.add("on");
+  setTimeout(() => { $("thanks").classList.remove("on"); setTimeout(next, 700); }, 6000);
+}
+function connect() {
+  const ev = new EventSource("/api/events");
+  ev.addEventListener("state", e => { S = JSON.parse(e.data); S.recent.forEach(g => seen.add(g.id)); paint(); });
+  ev.addEventListener("gift", e => { const d = JSON.parse(e.data); if (!S) return; S.totals = d.totals; paint(); if (!seen.has(d.gift.id)) { seen.add(d.gift.id); thank(d.gift); } });
+  ["state", "gift"].forEach(k => ev.addEventListener(k, () => lastEv = Date.now()));
+}
+let lastEv = Date.now(); const seen = new Set();
+// fallback if a proxy holds the stream: poll, and thank any gift we have not shown yet
+function poll() { fetch("/api/state").then(r => r.json()).then(d => { const first = !S; S = d; paint();
+    d.recent.forEach(g => { if (!seen.has(g.id)) { seen.add(g.id); if (!first) thank(g); } }); }).catch(() => {}); }
+poll(); setInterval(() => { if (Date.now() - lastEv > 6000) poll(); }, 5000);
+connect();
+if (qs.get("demo") === "1") setInterval(() => {
+  if (!S) return; const p = S.campaign.purposes[Math.floor(Math.random() * S.campaign.purposes.length)];
+  thank({ name: ["Ana", "James", "A friend", "Minji"][Math.floor(Math.random() * 4)], amount: 25, splits: [{ purpose: p.id, amount: 25 }] });
+}, 6000);
+</script>
+</body>
+</html>
